@@ -18,7 +18,7 @@ CONFIG = {
     
     # 🔽 AJUSTE SÓ ESSES 3 VALORES 🔽
     "PRECO_MAXIMO": 0.40,      # Ex: 0.40 = R$ 0,40
-    "PRECO_MINIMO": 0.03,      # Ex: 0.20 = R$ 0,20
+    "PRECO_MINIMO": 0.20,      # Ex: 0.20 = R$ 0,20
     "INTERVALO_PRECO": 0.01,   # Espaço entre preços (0.01 = 1 centavo)
     
     # 🔽 CONFIGURAÇÕES PADRÃO 🔽
