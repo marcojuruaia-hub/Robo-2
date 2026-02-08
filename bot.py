@@ -129,18 +129,43 @@ def main():
                         
                         preco = float(o.get('price', 0))
                         lado = o.get('side', '').lower()
-                        status = o.get('status', 'open')
+                        status = o.get('status', '')  # ⭐⭐ CORREÇÃO AQUI! ⭐⭐
+                        
+                        print(f"🔍 Ordem: {lado} @ ${preco:.2f} - Status: {status}")
                         
                         if lado == 'buy':
                             ordens_ativas_compras.append(preco)
-                            if status == 'filled' and preco not in posicoes_compradas:
-                                print(f"🎯 COMPRA EXECUTADA: ${preco:.2f}")
+                            
+                            # ⭐⭐ DETECTA ORDEM EXECUTADA DE 3 FORMAS ⭐⭐
+                            ordem_executada = False
+                            
+                            # 1. Pelo status
+                            if status in ['filled', 'closed', 'executed']:
+                                ordem_executada = True
+                                print(f"🎯 Status indica EXECUTADA: {status}")
+                            
+                            # 2. Pela quantidade preenchida (filled_amount)
+                            filled = float(o.get('filled', 0))
+                            size = float(o.get('size', o.get('amount', 0)))
+                            
+                            if size > 0 and filled >= size:
+                                ordem_executada = True
+                                print(f"🎯 Quantidade EXECUTADA: {filled}/{size}")
+                            
+                            # 3. Se não tem mais a ordem ativa mas estava na nossa lista
+                            if preco in ordens_compra_criadas and preco not in ordens_ativas_compras:
+                                ordem_executada = True
+                                print(f"🎯 Ordem removida da lista ativa (provavelmente executada)")
+                            
+                            if ordem_executada and preco not in posicoes_compradas:
+                                print(f"🚨🚨🚨 COMPRA EXECUTADA DETECTADA: ${preco:.2f} 🚨🚨🚨")
                                 posicoes_compradas.append(preco)
                                 
                         elif lado == 'sell':
                             ordens_ativas_vendas.append(preco)
                             
-                    except:
+                    except Exception as e:
+                        print(f"⚠️  Erro ao processar ordem: {e}")
                         continue
                 
                 print(f"📊 Ordens ativas: {len(ordens_ativas_compras)} compras, {len(ordens_ativas_vendas)} vendas")
@@ -149,22 +174,31 @@ def main():
                 print(f"⚠️  Erro ao ver ordens: {e}")
             
             # ========== CRIA VENDAS PARA COMPRAS EXECUTADAS ==========
+            vendas_criadas_este_ciclo = 0
             for preco_compra in posicoes_compradas[:]:  # Copia da lista
                 # Se já criamos venda para esta compra, pular
                 if preco_compra in ordens_venda_criadas:
                     continue
+                
+                # Limite de vendas por ciclo
+                if vendas_criadas_este_ciclo >= 2:
+                    break
                 
                 # Calcular preço de venda
                 preco_venda = calcular_preco_venda(preco_compra, CONFIG)
                 
                 # Verificar se já existe venda neste preço
                 if preco_venda in ordens_ativas_vendas:
+                    print(f"⏭️  Venda já existe para compra @ ${preco_compra:.2f}")
                     ordens_venda_criadas.append(preco_compra)
                     continue
                 
                 # Criar ordem de VENDA
-                print(f"💰 Criando VENDA para compra @ ${preco_compra:.2f}")
-                print(f"   🎯 Preço venda: ${preco_venda:.2f} (lucro: ${CONFIG['LUCRO_FIXO']})")
+                print(f"\n💰💰💰 CRIANDO VENDA AUTOMÁTICA!")
+                print(f"   Compra executada: ${preco_compra:.2f}")
+                print(f"   Preço venda: ${preco_venda:.2f}")
+                print(f"   Lucro por share: ${CONFIG['LUCRO_FIXO']}")
+                print(f"   Lucro total: ${CONFIG['LUCRO_FIXO'] * CONFIG['SHARES_POR_ORDEM']:.2f}")
                 
                 try:
                     ordem_venda = OrderArgs(
@@ -176,17 +210,21 @@ def main():
                     
                     client.create_and_post_order(ordem_venda)
                     ordens_venda_criadas.append(preco_compra)
-                    print(f"   ✅ VENDA criada com sucesso!")
+                    vendas_criadas_este_ciclo += 1
                     
-                    time.sleep(1)  # Pausa entre ordens
+                    print(f"   ✅✅✅ VENDA CRIADA COM SUCESSO!")
+                    
+                    time.sleep(2)  # Pausa maior entre vendas
                     
                 except Exception as e:
                     erro = str(e).lower()
                     if "already" in erro or "duplicate" in erro:
                         print(f"   ⏭️  Venda já existe")
                         ordens_venda_criadas.append(preco_compra)
+                    elif "balance" in erro or "insufficient" in erro:
+                        print(f"   ❌ Sem saldo (shares) para vender")
                     else:
-                        print(f"   ❌ Erro na venda: {str(e)[:50]}...")
+                        print(f"   ❌ Erro na venda: {str(e)[:100]}...")
             
             # ========== CRIA NOVAS ORDENS DE COMPRA ==========
             print(f"\n🔵 VERIFICANDO GRID DE COMPRAS...")
@@ -245,20 +283,28 @@ def main():
             
             # Mostrar situação atual
             if ordens_compra_criadas:
-                print(f"\n🛒 NOSSAS COMPRAS PENDENTES:")
-                for preco in sorted(ordens_compra_criadas, reverse=True)[:5]:
-                    status = "✅ EXECUTADA" if preco in posicoes_compradas else "⏳ AGUARDANDO"
+                print(f"\n🛒 NOSSAS COMPRAS:")
+                for preco in sorted(ordens_compra_criadas, reverse=True)[:8]:
+                    if preco in posicoes_compradas:
+                        if preco in ordens_venda_criadas:
+                            status = "💰 VENDA CRIADA"
+                        else:
+                            status = "🎯 EXECUTADA (aguardando venda)"
+                    elif preco in ordens_ativas_compras:
+                        status = "⏳ AGUARDANDO EXECUÇÃO"
+                    else:
+                        status = "❓ STATUS DESCONHECIDO"
                     print(f"   • ${preco:.2f} - {status}")
             
             if posicoes_compradas:
-                print(f"\n💰 VENDAS CRIADAS/CONCLUÍDAS:")
+                print(f"\n💰 POSIÇÕES EXECUTADAS:")
                 for preco_compra in posicoes_compradas[:5]:
                     if preco_compra in ordens_venda_criadas:
                         preco_venda = calcular_preco_venda(preco_compra, CONFIG)
                         lucro = CONFIG["LUCRO_FIXO"] * CONFIG["SHARES_POR_ORDEM"]
                         print(f"   • Compra ${preco_compra:.2f} → Venda ${preco_venda:.2f} (+${lucro:.2f})")
                     else:
-                        print(f"   • Compra ${preco_compra:.2f} → ⏳ Aguardando venda")
+                        print(f"   • Compra ${preco_compra:.2f} → ⏳ Aguardando criação de venda")
             
             # ========== AGUARDAR PRÓXIMO CICLO ==========
             print(f"\n⏳ Próximo ciclo em {CONFIG['INTERVALO_TEMPO']} segundos...")
@@ -275,6 +321,18 @@ def main():
         print(f"   • Compras executadas: {len(posicoes_compradas)}")
         print(f"   • Vendas criadas: {len(ordens_venda_criadas)}")
         print(f"{'='*50}")
+        
+        # Mostrar situação financeira
+        if posicoes_compradas:
+            print(f"\n💰 LUCRO POTENCIAL:")
+            total_lucro = 0
+            for preco_compra in posicoes_compradas:
+                if preco_compra in ordens_venda_criadas:
+                    lucro = CONFIG["LUCRO_FIXO"] * CONFIG["SHARES_POR_ORDEM"]
+                    total_lucro += lucro
+                    print(f"   • Compra ${preco_compra:.2f}: +${lucro:.2f}")
+            print(f"   📈 TOTAL: +${total_lucro:.2f}")
+        
     except Exception as e:
         print(f"\n❌ ERRO CRÍTICO: {e}")
         import traceback
