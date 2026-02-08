@@ -23,7 +23,7 @@ CONFIG = {
     "PROXY": "0x658293eF9454A2DD555eb4afcE6436aDE78ab20B",
     
     # 🔽 ESTRATÉGIA DE COMPRA
-    "PRECO_MAX_COMPRA": 0.80,     # Começa comprando a 0.80
+    "PRECO_MAX_COMPRA": 0.60,     # Começa comprando a 0.80
     "PRECO_MIN_COMPRA": 0.50,     # Até 0.50
     "INTERVALO_COMPRA": 0.02,     # Espaço entre ordens
     
