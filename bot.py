@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-🤖 ROBÔ GRID TRADING - VERSÃO CORRIGIDA (VÊ ORDENS)
+🤖 ROBÔ GRID TRADING REAL - MAINNET FUNCIONANDO
+Igual ao seu bot de vendas, mas com COMPRA + VENDA automática
 """
 
 import os
@@ -10,174 +11,219 @@ from py_clob_client.clob_types import OrderArgs
 from py_clob_client.order_builder.constants import BUY, SELL
 
 print("=" * 70)
-print(">>> 🤖 ROBÔ GRID TRADING - VÊ ORDENS CORRETAMENTE <<<")
+print(">>> 🤖 ROBÔ GRID TRADING REAL - MAINNET FUNCIONANDO <<<")
 print("=" * 70)
 
 # ============================================================================
+# ⚙️ CONFIGURAÇÃO REAL (EDITA SÓ AQUI)
+# ============================================================================
 CONFIG = {
-    "NOME": "GRID-CORRIGIDO",
-    "TOKEN_ID": "85080102177445047827595824773776292884437000821375292353013080455752528630674",
+    "NOME": "GRID-COMPRA-VENDA-AUTO",
+    "TOKEN_ID": "85080102177445047827595824773776292884437000821375292353013080455752528630674",  # BTC UP
     "PROXY": "0x658293eF9454A2DD555eb4afcE6436aDE78ab20B",
     
-    "COMPRA_INICIO": 0.80,
-    "COMPRA_FIM": 0.50,
-    "INTERVALO_COMPRA": 0.02,
-    "LUCRO_POR_OPERACAO": 0.05,
+    # 🔽 ESTRATÉGIA DE COMPRA
+    "PRECO_MAX_COMPRA": 0.80,     # Começa comprando a 0.80
+    "PRECO_MIN_COMPRA": 0.50,     # Até 0.50
+    "INTERVALO_COMPRA": 0.02,     # Espaço entre ordens
     
-    "SHARES_POR_ORDEM": 1,      # ⚠️ MUDE PARA 1!
-    "INTERVALO_TEMPO": 30,
-    "MAX_ORDENS": 10,
+    # 🔽 ESTRATÉGIA DE VENDA (LUCRO AUTOMÁTICO)
+    "LUCRO_FIXO": 0.05,           # Vende com +$0.05 de lucro
+    
+    # 🔽 CONFIGURAÇÕES PADRÃO
+    "SHARES_POR_ORDEM": 5,        # Quantidade por ordem
+    "INTERVALO_TEMPO": 20,        # Tempo entre ciclos (segundos)
+    "MAX_ORDENS_SIMULTANEAS": 10, # Máximo de ordens abertas
 }
 # ============================================================================
 
 def criar_grid_compras(config):
-    inicio = config["COMPRA_INICIO"]
-    fim = config["COMPRA_FIM"]
+    """Cria automaticamente a lista de preços de COMPRA"""
+    preco_max = config["PRECO_MAX_COMPRA"]
+    preco_min = config["PRECO_MIN_COMPRA"]
     intervalo = config["INTERVALO_COMPRA"]
     
-    preco_atual = inicio
+    preco_atual = preco_max
     grid = []
-    while preco_atual >= fim:
+    while preco_atual >= preco_min:
         grid.append(round(preco_atual, 2))
         preco_atual -= intervalo
     
     return grid
 
 def calcular_preco_venda(preco_compra, config):
-    return round(preco_compra + config["LUCRO_POR_OPERACAO"], 2)
+    """Calcula preço de venda com lucro fixo"""
+    return round(preco_compra + config["LUCRO_FIXO"], 2)
 
 def main():
+    # 1. Cria grid automaticamente
     CONFIG["GRID_COMPRAS"] = criar_grid_compras(CONFIG)
     
-    print(f"🔧 CONFIGURAÇÃO:")
-    print(f"   Token ID: {CONFIG['TOKEN_ID'][:20]}...")
+    print(f"🔧 CONFIGURAÇÃO REAL:")
+    print(f"   Nome: {CONFIG['NOME']}")
+    print(f"   Compra: ${CONFIG['PRECO_MAX_COMPRA']} até ${CONFIG['PRECO_MIN_COMPRA']}")
+    print(f"   Lucro: ${CONFIG['LUCRO_FIXO']} por share")
     print(f"   Grid: {len(CONFIG['GRID_COMPRAS'])} preços")
+    print(f"   Exemplo: {CONFIG['GRID_COMPRAS'][:3]}...")
     print("-" * 50)
     
-    # CONEXÃO (igual ao seu bot funcional)
+    # 2. Conecta ao Polymarket MAINNET (igual seu bot funcional)
     key = os.getenv("PRIVATE_KEY")
     if not key:
         print("❌ ERRO: PRIVATE_KEY não configurada!")
+        print("   Railway: Adicione como variável de ambiente")
         return
     
     try:
+        # ⭐⭐ CONEXÃO IDÊNTICA AO SEU BOT DE VENDAS QUE FUNCIONA ⭐⭐
         client = ClobClient(
-            "https://clob.polymarket.com/",
+            "https://clob.polymarket.com/",  # MAINNET FUNCIONANDO
             key=key,
-            chain_id=137,
+            chain_id=137,  # Polygon Mainnet
             signature_type=2,
             funder=CONFIG["PROXY"]
         )
         client.set_api_creds(client.create_or_derive_api_creds())
-        print("✅ Conectado e API Creds derivadas")
+        print("✅ Conectado ao Polymarket MAINNET (funcionando!)")
     except Exception as e:
         print(f"❌ Falha na conexão: {e}")
         return
     
-    # CONTROLE INTERNO FORTE
+    # 3. Controle interno SIMPLES mas EFETIVO
     ciclo = 0
-    ordens_criadas_interno = []  # O que NÓS criamos
-    posicoes_compradas = []
+    ordens_compra_criadas = []      # Preços onde criamos ordens de COMPRA
+    posicoes_compradas = []         # Preços onde a COMPRA foi executada
+    ordens_venda_criadas = []       # Preços onde criamos ordens de VENDA
+    
+    print("\n" + "="*50)
+    print("🚀 INICIANDO OPERAÇÃO...")
+    print("="*50)
     
     try:
         while True:
             ciclo += 1
             
-            print(f"\n{'='*60}")
+            print(f"\n{'='*50}")
             print(f"🔄 CICLO {ciclo} - {time.strftime('%H:%M:%S')}")
-            print(f"{'='*60}")
+            print(f"{'='*50}")
             
-            # ========== PASSO 1: VER ORDENS NA API (CORRETAMENTE) ==========
-            ordens_api_compras = []
-            ordens_api_vendas = []
+            # ========== VERIFICA ORDENS EXISTENTES ==========
+            ordens_ativas_compras = []
+            ordens_ativas_vendas = []
             
             try:
-                # DEBUG: Ver o que a API retorna
-                todas_raw = client.get_orders()
-                print(f"🔍 API retornou {len(todas_raw)} ordens totais")
+                todas_ordens = client.get_orders()
                 
-                for ordem in todas_raw:
+                for ordem in todas_ordens:
                     try:
-                        # Converter para dict de forma segura
+                        # Converter para dict
                         if hasattr(ordem, '__dict__'):
                             o = ordem.__dict__
                         else:
                             o = dict(ordem)
                         
-                        # Verificar se é do nosso token
+                        # Verificar token
                         token = o.get('token_id', o.get('asset_id', ''))
-                        if token == CONFIG["TOKEN_ID"]:
-                            preco = float(o.get('price', 0))
-                            lado = o.get('side', '').lower()
-                            status = o.get('status', 'open')
+                        if token != CONFIG["TOKEN_ID"]:
+                            continue
+                        
+                        preco = float(o.get('price', 0))
+                        lado = o.get('side', '').lower()
+                        status = o.get('status', 'open')
+                        
+                        if lado == 'buy':
+                            ordens_ativas_compras.append(preco)
+                            if status == 'filled' and preco not in posicoes_compradas:
+                                print(f"🎯 COMPRA EXECUTADA: ${preco:.2f}")
+                                posicoes_compradas.append(preco)
+                                
+                        elif lado == 'sell':
+                            ordens_ativas_vendas.append(preco)
                             
-                            if lado == 'buy':
-                                ordens_api_compras.append({
-                                    'preco': preco,
-                                    'status': status
-                                })
-                            elif lado == 'sell':
-                                ordens_api_vendas.append({
-                                    'preco': preco,
-                                    'status': status
-                                })
                     except:
                         continue
                 
-                print(f"📊 API: {len(ordens_api_compras)} compras, {len(ordens_api_vendas)} vendas")
+                print(f"📊 Ordens ativas: {len(ordens_ativas_compras)} compras, {len(ordens_ativas_vendas)} vendas")
                 
             except Exception as e:
-                print(f"⚠️  Erro ao ver ordens API: {e}")
+                print(f"⚠️  Erro ao ver ordens: {e}")
             
-            # ========== PASSO 2: CRIAR NOVAS ORDENS ==========
-            print(f"\n🔵 ANALISANDO GRID...")
-            novas_criadas = 0
-            
-            for preco in CONFIG["GRID_COMPRAS"]:
-                # Limite máximo
-                if len(ordens_criadas_interno) >= CONFIG["MAX_ORDENS"]:
-                    print(f"⚠️  Limite de {CONFIG['MAX_ORDENS']} ordens")
-                    break
-                
-                # Verificar se JÁ TEMOS no controle interno
-                if preco in ordens_criadas_interno:
-                    print(f"⏭️  ${preco:.2f}: Já criamos (controle interno)")
+            # ========== CRIA VENDAS PARA COMPRAS EXECUTADAS ==========
+            for preco_compra in posicoes_compradas[:]:  # Copia da lista
+                # Se já criamos venda para esta compra, pular
+                if preco_compra in ordens_venda_criadas:
                     continue
                 
-                # Verificar se JÁ EXISTE na API
-                ja_existe_api = any(
-                    abs(o['preco'] - preco) < 0.001 
-                    for o in ordens_api_compras
-                )
+                # Calcular preço de venda
+                preco_venda = calcular_preco_venda(preco_compra, CONFIG)
                 
-                if ja_existe_api:
-                    print(f"⏭️  ${preco:.2f}: Já existe na API")
-                    ordens_criadas_interno.append(preco)
+                # Verificar se já existe venda neste preço
+                if preco_venda in ordens_ativas_vendas:
+                    ordens_venda_criadas.append(preco_compra)
                     continue
                 
-                # Tentar criar
-                print(f"🎯 Tentando COMPRA a ${preco:.2f}...")
-                quantidade = CONFIG["SHARES_POR_ORDEM"]
+                # Criar ordem de VENDA
+                print(f"💰 Criando VENDA para compra @ ${preco_compra:.2f}")
+                print(f"   🎯 Preço venda: ${preco_venda:.2f} (lucro: ${CONFIG['LUCRO_FIXO']})")
                 
                 try:
-                    ordem = OrderArgs(
+                    ordem_venda = OrderArgs(
+                        price=preco_venda,
+                        size=CONFIG["SHARES_POR_ORDEM"],
+                        side=SELL,
+                        token_id=CONFIG["TOKEN_ID"]
+                    )
+                    
+                    client.create_and_post_order(ordem_venda)
+                    ordens_venda_criadas.append(preco_compra)
+                    print(f"   ✅ VENDA criada com sucesso!")
+                    
+                    time.sleep(1)  # Pausa entre ordens
+                    
+                except Exception as e:
+                    erro = str(e).lower()
+                    if "already" in erro or "duplicate" in erro:
+                        print(f"   ⏭️  Venda já existe")
+                        ordens_venda_criadas.append(preco_compra)
+                    else:
+                        print(f"   ❌ Erro na venda: {str(e)[:50]}...")
+            
+            # ========== CRIA NOVAS ORDENS DE COMPRA ==========
+            print(f"\n🔵 VERIFICANDO GRID DE COMPRAS...")
+            novas_compras = 0
+            
+            for preco in CONFIG["GRID_COMPRAS"]:
+                # Limite de ordens simultâneas
+                total_ordens = len(ordens_ativas_compras) + len(ordens_ativas_vendas)
+                if total_ordens >= CONFIG["MAX_ORDENS_SIMULTANEAS"]:
+                    print(f"⚠️  Limite de {CONFIG['MAX_ORDENS_SIMULTANEAS']} ordens atingido")
+                    break
+                
+                # Se já temos ordem neste preço, pular
+                if preco in ordens_ativas_compras or preco in ordens_compra_criadas:
+                    continue
+                
+                # Tentar criar ordem de COMPRA
+                print(f"🎯 Tentando COMPRA a ${preco:.2f}...")
+                
+                try:
+                    ordem_compra = OrderArgs(
                         price=preco,
-                        size=quantidade,
+                        size=CONFIG["SHARES_POR_ORDEM"],
                         side=BUY,
                         token_id=CONFIG["TOKEN_ID"]
                     )
                     
-                    resultado = client.create_and_post_order(ordem)
+                    client.create_and_post_order(ordem_compra)
+                    ordens_compra_criadas.append(preco)
+                    novas_compras += 1
                     
-                    if resultado:
-                        ordens_criadas_interno.append(preco)
-                        novas_criadas += 1
-                        print(f"✅ COMPRA criada: {quantidade} @ ${preco:.2f}")
-                        
-                        # Pausa e limite
-                        time.sleep(2)
-                        if novas_criadas >= 2:
-                            break
+                    print(f"✅ COMPRA criada: {CONFIG['SHARES_POR_ORDEM']} shares @ ${preco:.2f}")
+                    
+                    # Pausa e limite
+                    time.sleep(1)
+                    if novas_compras >= 2:  # Máximo 2 novas por ciclo
+                        break
                     
                 except Exception as e:
                     erro = str(e).lower()
@@ -185,33 +231,54 @@ def main():
                         print(f"💰 Sem saldo para ${preco:.2f}")
                         break
                     elif "already" in erro or "duplicate" in erro:
-                        print(f"⏭️  ${preco:.2f}: Já existe (erro API)")
-                        ordens_criadas_interno.append(preco)
+                        print(f"⏭️  Já existe ordem a ${preco:.2f}")
+                        ordens_compra_criadas.append(preco)
                     else:
                         print(f"⚠️  Erro: {str(e)[:50]}...")
             
-            # ========== PASSO 3: RESUMO ==========
-            print(f"\n📋 RESUMO CICLO {ciclo}:")
-            print(f"   • Controle interno: {len(ordens_criadas_interno)} ordens")
-            print(f"   • API compras: {len(ordens_api_compras)} ordens")
-            print(f"   • Novas criadas: {novas_criadas}")
+            # ========== RESUMO DO CICLO ==========
+            print(f"\n📋 RESUMO DO CICLO {ciclo}:")
+            print(f"   • Compras criadas: {len(ordens_compra_criadas)}")
+            print(f"   • Compras executadas: {len(posicoes_compradas)}")
+            print(f"   • Vendas criadas: {len(ordens_venda_criadas)}")
+            print(f"   • Novas ordens este ciclo: {novas_compras}")
             
-            if ordens_criadas_interno:
-                print(f"\n🎯 NOSSAS ORDENS:")
-                for preco in sorted(ordens_criadas_interno, reverse=True)[:5]:
-                    print(f"   • ${preco:.2f}")
+            # Mostrar situação atual
+            if ordens_compra_criadas:
+                print(f"\n🛒 NOSSAS COMPRAS PENDENTES:")
+                for preco in sorted(ordens_compra_criadas, reverse=True)[:5]:
+                    status = "✅ EXECUTADA" if preco in posicoes_compradas else "⏳ AGUARDANDO"
+                    print(f"   • ${preco:.2f} - {status}")
             
-            # ========== PASSO 4: AGUARDAR ==========
-            print(f"\n⏳ Próximo ciclo em {CONFIG['INTERVALO_TEMPO']}s...")
-            print(f"{'='*60}")
+            if posicoes_compradas:
+                print(f"\n💰 VENDAS CRIADAS/CONCLUÍDAS:")
+                for preco_compra in posicoes_compradas[:5]:
+                    if preco_compra in ordens_venda_criadas:
+                        preco_venda = calcular_preco_venda(preco_compra, CONFIG)
+                        lucro = CONFIG["LUCRO_FIXO"] * CONFIG["SHARES_POR_ORDEM"]
+                        print(f"   • Compra ${preco_compra:.2f} → Venda ${preco_venda:.2f} (+${lucro:.2f})")
+                    else:
+                        print(f"   • Compra ${preco_compra:.2f} → ⏳ Aguardando venda")
+            
+            # ========== AGUARDAR PRÓXIMO CICLO ==========
+            print(f"\n⏳ Próximo ciclo em {CONFIG['INTERVALO_TEMPO']} segundos...")
+            print(f"{'='*50}")
             time.sleep(CONFIG["INTERVALO_TEMPO"])
             
     except KeyboardInterrupt:
-        print(f"\n\n🛑 Robô parado")
-        print(f"   Ciclos: {ciclo}")
-        print(f"   Ordens criadas: {len(ordens_criadas_interno)}")
+        print(f"\n\n{'='*50}")
+        print("🛑 ROBÔ PARADO PELO USUÁRIO")
+        print(f"{'='*50}")
+        print(f"📊 RESUMO FINAL:")
+        print(f"   • Total de ciclos: {ciclo}")
+        print(f"   • Compras criadas: {len(ordens_compra_criadas)}")
+        print(f"   • Compras executadas: {len(posicoes_compradas)}")
+        print(f"   • Vendas criadas: {len(ordens_venda_criadas)}")
+        print(f"{'='*50}")
     except Exception as e:
-        print(f"\n❌ ERRO: {e}")
+        print(f"\n❌ ERRO CRÍTICO: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
