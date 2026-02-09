@@ -32,11 +32,11 @@ CONFIG = {
     "PROXY": "0x658293eF9454A2DD555eb4afcE6436aDE78ab20B",
     
     # Grid de Compra: Começa em 0.64 e vai descendo até 0.55
-    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(64, 55, -1)],
+    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(66, 50, -2)],
     
-    "LUCRO_FIXO": 0.02,           # Ex: Compra 0.64 -> Vende 0.66
+    "LUCRO_FIXO": 0.05,           # Ex: Compra 0.64 -> Vende 0.66
     "SHARES_POR_ORDEM": 5.0,      # Tamanho da ordem
-    "INTERVALO_TEMPO": 15,        # Segundos entre ciclos
+    "INTERVALO_TEMPO": 120,        # Segundos entre ciclos
 }
 
 # URL descoberta no guia bits_and_bobs para ler saldo real
