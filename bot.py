@@ -30,7 +30,7 @@ CONFIG = {
     
     # 🔽 ESTRATÉGIA
     # Exemplo: Se preço atual é 0.60, grid de 0.68 a 0.54
-    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(65, 50, -1],
+    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(64, 50, -1)],
     
     # 🔽 CONFIGURAÇÕES
     "LUCRO_FIXO": 0.02,           # Lucro desejado por share
