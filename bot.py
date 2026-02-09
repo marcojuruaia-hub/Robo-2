@@ -25,7 +25,7 @@ print("=" * 70)
 # ============================================================================
 CONFIG = {
     # ⚠️ REVISE ESSE ID COM CUIDADO! (Deve ter apenas números, sem espaços)
-    "TOKEN_ID": "COLE_O_NOVO_ID_AQUI", 
+    "TOKEN_ID": "24120579393151285531790392365655515414663383379081658053153655752666989210807", 
     "PROXY": "0x658293eF9454A2DD555eb4afcE6436aDE78ab20B",
     
     # Grid: 0.64 até 0.54
