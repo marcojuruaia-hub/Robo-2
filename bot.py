@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-🤖 ROBÔ GRID TRADING V38 - MESTRE DA RECONCILIAÇÃO
-Corrige o erro de "Status Desconhecido" lendo a API de Dados Real.
+🤖 ROBÔ GRID TRADING V39 - SINCRONIZADO
+Correção: Impede recompra imediata atualizando a lista de vendas em tempo real.
 """
 
 import os
@@ -16,33 +16,34 @@ from py_clob_client.clob_types import OrderArgs, OpenOrderParams
 from py_clob_client.order_builder.constants import BUY, SELL
 
 print("=" * 70)
-print(">>> 🤖 ROBÔ V38: RECONCILIAÇÃO DE SALDO ATIVADA <<<")
+print(">>> 🤖 ROBÔ V39: ANTI-DUPLICAÇÃO ATIVADO <<<")
 print("=" * 70)
 
 # ============================================================================
 # ⚙️ CONFIGURAÇÃO REAL
 # ============================================================================
 CONFIG = {
-    "NOME": "GRID-RECONCILIACAO-V38",
-    # ⚠️ MUITO IMPORTANTE: Garanta que este ID é válido para HOJE!
-    "TOKEN_ID": "24120579393151285531790392365655515414663383379081658053153655752666989210807", 
+    "NOME": "GRID-V39-SINCRONIZADO",
+    # ⚠️ ID DE HOJE (Se o mercado anterior fechou, pegue um novo!)
+    "TOKEN_ID": "COLE_O_NOVO_ID_AQUI", 
     "PROXY": "0x658293eF9454A2DD555eb4afcE6436aDE78ab20B",
     
-    # 🔽 ESTRATÉGIA
-    # Exemplo: Se preço atual é 0.60, grid de 0.68 a 0.54
-    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(64, 50, -1)],
+    # 🔽 ESTRATÉGIA (Ajuste conforme o preço atual)
+    # Exemplo: Se preço está 0.64, operamos de 0.68 até 0.54
+    # Sintaxe corrigida: range(inicio, fim, passo) com parênteses certos
+    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(64, 53, -1)],
     
     # 🔽 CONFIGURAÇÕES
-    "LUCRO_FIXO": 0.02,           # Lucro desejado por share
-    "SHARES_POR_ORDEM": 5.0,      # Quantidade fixa (ajustável)
-    "INTERVALO_TEMPO": 20,        # Ciclos mais rápidos (30s)
+    "LUCRO_FIXO": 0.02,           # Lucro ajustado para $0.02
+    "SHARES_POR_ORDEM": 5.0,      
+    "INTERVALO_TEMPO": 30,        # Mais rápido para pegar a volatilidade
 }
 
 DATA_API = "https://data-api.polymarket.com"
 # ============================================================================
 
 def obter_posicao_real(asset_id, user_address):
-    """Consulta a API de Dados para saber o saldo REAL na carteira"""
+    """Consulta saldo real na API de Dados"""
     try:
         url = f"{DATA_API}/positions"
         params = {"user": user_address, "asset_id": asset_id}
@@ -56,7 +57,6 @@ def obter_posicao_real(asset_id, user_address):
         return 0.0
 
 def calcular_qtd(preco):
-    # Regra inteligente: 5 shares ou valor > $1
     return 5.0 if preco > 0.20 else round(1.0 / preco, 2)
 
 def main():
@@ -76,6 +76,7 @@ def main():
     ciclo = 0
     print("\n" + "="*50)
     print(f"🚀 INICIANDO GRID: {CONFIG['GRID_COMPRAS']}")
+    print(f"💰 META DE LUCRO: ${CONFIG['LUCRO_FIXO']} por ordem")
     print("="*50)
 
     while True:
@@ -83,108 +84,92 @@ def main():
         print(f"\n🔄 CICLO {ciclo} - {time.strftime('%H:%M:%S')}")
         
         try:
-            # 1. LEITURA DO ESTADO ATUAL (SNAPSHOT)
+            # 1. LEITURA INICIAL
             todas_ordens = client.get_orders(OpenOrderParams())
-            
-            # Filtra apenas ordens deste mercado
             minhas_ordens = [o for o in todas_ordens if o.get('asset_id') == CONFIG["TOKEN_ID"]]
             
             compras_abertas = [o for o in minhas_ordens if o.get('side') == BUY]
             vendas_abertas  = [o for o in minhas_ordens if o.get('side') == SELL]
             
             precos_compras = [round(float(o.get('price')), 2) for o in compras_abertas]
+            # Lista de vendas que vamos atualizar em tempo real
             precos_vendas  = [round(float(o.get('price')), 2) for o in vendas_abertas]
             
-            # 2. LEITURA DA CARTEIRA (A VERDADE ABSOLUTA)
+            # 2. SALDO E CÁLCULOS
             saldo_carteira = obter_posicao_real(CONFIG["TOKEN_ID"], CONFIG["PROXY"])
-            
-            # Calcula quantas cotas já estão 'travadas' em ordens de venda
             saldo_em_venda = sum([float(o.get('size')) for o in vendas_abertas])
-            
-            # Cotas Soltas = Saldo Real - Saldo Comprometido em Vendas
-            # Se isso for positivo, significa que uma compra foi executada e precisamos vender!
             cotas_soltas = saldo_carteira - saldo_em_venda
             
-            print(f"📊 SALDO REAL: {saldo_carteira} | EM VENDA: {saldo_em_venda} | 🟢 SOLTAS: {cotas_soltas}")
+            print(f"📊 CARTEIRA: {saldo_carteira} | TRAVADO: {saldo_em_venda} | 🟢 SOLTAS: {cotas_soltas}")
             
             # ==========================================================
-            # 🚀 FASE 1: CRIAR VENDAS (RECUPERAÇÃO)
+            # 🚀 FASE 1: CRIAR VENDAS (PRIORIDADE MÁXIMA)
             # ==========================================================
-            if cotas_soltas >= 1.0: # Se tiver pelo menos 1 cota solta
-                print(f"💡 DETECTADO: {cotas_soltas} cotas sem venda! Iniciando criação de ordens...")
+            if cotas_soltas >= 1.0:
+                print(f"💡 RECUPERAÇÃO: {cotas_soltas} cotas precisam de venda...")
                 
-                # Vamos tentar casar essas cotas soltas com nosso Grid
-                # Prioridade: Vender para as compras mais caras primeiro (para garantir lucro logo)
                 for p_compra in CONFIG["GRID_COMPRAS"]:
                     if cotas_soltas < 1.0: break 
                     
-                    # Se NÃO tem compra aberta neste preço, e NÃO tem venda aberta no alvo...
-                    # É muito provável que esta seja a compra que foi executada.
                     p_venda_alvo = round(p_compra + CONFIG["LUCRO_FIXO"], 2)
                     
+                    # Se não tem compra aberta E não tem venda aberta
                     if p_compra not in precos_compras and p_venda_alvo not in precos_vendas:
                         qtd = calcular_qtd(p_compra)
-                        
-                        # Ajusta qtd se o saldo solto for menor que o lote padrão
                         if qtd > cotas_soltas: qtd = cotas_soltas
                         
                         try:
-                            print(f"💰 CRIANDO VENDA: ${p_venda_alvo} (Ref: Compra ${p_compra})")
+                            print(f"💰 VENDENDO: ${p_venda_alvo} (Origem: ${p_compra})")
                             client.create_and_post_order(OrderArgs(
-                                price=p_venda_alvo, 
-                                size=qtd, 
-                                side=SELL, 
-                                token_id=CONFIG["TOKEN_ID"]
+                                price=p_venda_alvo, size=qtd, side=SELL, token_id=CONFIG["TOKEN_ID"]
                             ))
                             cotas_soltas -= qtd
-                            print("   ✅ Venda criada com sucesso!")
+                            
+                            # 🔥 A CORREÇÃO MÁGICA 🔥
+                            # Adicionamos essa venda na lista IMEDIATAMENTE.
+                            # Assim, a Fase 2 vai saber que essa venda existe e não vai recomprar.
+                            precos_vendas.append(p_venda_alvo)
+                            print("   ✅ Venda registrada na memória!")
+                            
                         except Exception as e:
-                            print(f"   ❌ Erro ao criar venda: {e}")
+                            print(f"   ❌ Erro venda: {e}")
             
             # ==========================================================
             # 🚀 FASE 2: MANUTENÇÃO DO GRID (COMPRAS)
             # ==========================================================
-            print(f"🔵 VERIFICANDO GRID DE COMPRAS...")
+            print(f"🔵 VERIFICANDO GRID...")
             novas_compras = 0
             
             for p_compra in CONFIG["GRID_COMPRAS"]:
-                # Se já temos compra aberta, pula
-                if p_compra in precos_compras:
-                    continue
+                # Se já temos compra, ok.
+                if p_compra in precos_compras: continue
                 
-                # Se já temos venda aberta correspondente (lucro esperando), NÃO recompra ainda
+                # Se já temos venda correspondente (MESMO QUE ACABOU DE SER CRIADA), espera.
                 p_venda_corresp = round(p_compra + CONFIG["LUCRO_FIXO"], 2)
+                
                 if p_venda_corresp in precos_vendas:
-                    print(f"   ⏳ ${p_compra}: Aguardando venda a ${p_venda_corresp} ser executada...")
+                    # Silencioso para não poluir o log, mas eficaz
+                    # print(f"   ⏳ Esperando venda a ${p_venda_corresp}...")
                     continue
                 
-                # Se chegamos aqui: Não tem compra, não tem venda. O caminho está livre.
-                if novas_compras >= 3: break # Limite de velocidade
+                # Se chegou aqui: Não tem compra E não tem venda. Pode repor.
+                if novas_compras >= 3: break
                 
                 try:
-                    print(f"🎯 Recolocando COMPRA a ${p_compra}...")
+                    print(f"🎯 RECOMPRANDO: ${p_compra}...")
                     client.create_and_post_order(OrderArgs(
-                        price=p_compra, 
-                        size=calcular_qtd(p_compra), 
-                        side=BUY, 
-                        token_id=CONFIG["TOKEN_ID"]
+                        price=p_compra, size=calcular_qtd(p_compra), side=BUY, token_id=CONFIG["TOKEN_ID"]
                     ))
-                    print("   ✅ Ordem enviada!")
                     novas_compras += 1
                 except Exception as e:
-                    erro = str(e)
-                    if "404" in erro:
-                        print("❌ ERRO 404: ID EXPIRADO! Pare o robô e troque o ID.")
+                    if "404" in str(e):
+                        print("❌ ERRO 404: ID EXPIRADO!")
                         break
-                    elif "balance" in erro.lower():
-                        print(f"   💰 Sem saldo USDC para ${p_compra}")
-                    else:
-                        print(f"   ⚠️ Erro menor: {erro[:50]}")
+                    print(f"   ⚠️ Erro: {str(e)[:40]}")
 
         except Exception as e:
-            print(f"❌ ERRO GERAL NO CICLO: {e}")
+            print(f"❌ ERRO GERAL: {e}")
         
-        print(f"⏳ Aguardando {CONFIG['INTERVALO_TEMPO']}s...")
         time.sleep(CONFIG["INTERVALO_TEMPO"])
 
 if __name__ == "__main__":
