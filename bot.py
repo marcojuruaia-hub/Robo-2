@@ -30,12 +30,12 @@ CONFIG = {
     
     # 🔽 ESTRATÉGIA
     # Exemplo: Se preço atual é 0.60, grid de 0.68 a 0.54
-    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(63, 51, -2)],
+    "GRID_COMPRAS": [round(x * 0.01, 2) for x in range(65, 50, -1],
     
     # 🔽 CONFIGURAÇÕES
-    "LUCRO_FIXO": 0.05,           # Lucro desejado por share
+    "LUCRO_FIXO": 0.02,           # Lucro desejado por share
     "SHARES_POR_ORDEM": 5.0,      # Quantidade fixa (ajustável)
-    "INTERVALO_TEMPO": 30,        # Ciclos mais rápidos (30s)
+    "INTERVALO_TEMPO": 20,        # Ciclos mais rápidos (30s)
 }
 
 DATA_API = "https://data-api.polymarket.com"
